@@ -3,7 +3,6 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
-#include <map>
 #include <cmath>
 
 # define M_PIl 3.141592653589793238462643383279502884L /* pi */
@@ -95,7 +94,7 @@ double MathLite::calc(const std::string &expr, bool &err)
     deconstructOp(obj);
     /*for(auto& i : obj.stack)
         std::cout << i << std::endl;*/
-    double r = doMath(obj);
+    obj.result = doMath(obj);
     switch(obj.errCode)
     {
         case 0:
@@ -118,10 +117,10 @@ double MathLite::calc(const std::string &expr, bool &err)
     }
     if(obj.errCode > 0) err = true;
     else err = false;
-    return r;
+    return obj.result;
 }
 
-MathStack MathLite::pushdown(const std::string &expr)
+MathStack MathLite::pushdown(const std::string &expr) const
 {
     MathStack obj;
     std::stack<size_t> posStack;
@@ -167,7 +166,7 @@ MathStack MathLite::pushdown(const std::string &expr)
     return obj;
 }
 
-void MathLite::deconstructOp(MathStack &obj)
+void MathLite::deconstructOp(MathStack &obj) const
 {
     if(obj.errCode > 0) return;
     std::vector<std::vector<char> > op_list = {{'^'}, {'*', '/'}, {'+', '-'}};
@@ -219,7 +218,7 @@ void MathLite::deconstructOp(MathStack &obj)
     }
 }
 
-double MathLite::doMath(MathStack &obj)
+double MathLite::doMath(MathStack &obj) const
 {
     if(obj.errCode > 0) return 0;
     size_t pos = obj.currentPos;
@@ -293,8 +292,10 @@ double MathLite::doMath(MathStack &obj)
         {
             if(strs[i] == "pi")
                 vs[i] = M_PIl;
-            else if(is_double(strs[i]))
+            else if(isDouble(strs[i]))
                 vs[i] = std::stod(strs[i]);
+            else if(isVariable(strs[i]))
+                vs[i] = varCache.at(strs[i]).result;
         }
     }
     if(minus_flag)
@@ -318,6 +319,60 @@ double MathLite::doMath(MathStack &obj)
     return 0;
 }
 
+void MathLite::setCache(const std::string &name, const MathStack &obj)
+{
+    if(obj.errCode == 0)
+        varCache[name] = obj;
+}
+
+MathStack MathLite::getCache(const std::string &name) const
+{
+    std::map<std::string, MathStack>::const_iterator it = varCache.find(name);
+    if(it != varCache.end())
+        return it->second;
+    MathStack obj;
+    obj.errCode = 5;
+    return obj;
+}
+
+void MathLite::clearCache()
+{
+    varCache.clear();
+}
+
+void MathLite::printCache() const
+{
+    for(std::map<std::string, MathStack>::const_iterator it = varCache.begin(); it != varCache.end(); ++it)
+    {
+        std::cout << it->first << " = ";
+        if(it->second.errCode == 0) std::cout << it->second.result << std::endl;
+        else std::cout << "error" << std::endl;
+    }
+}
+
+std::map<std::string, MathStack> MathLite::exportCache() const
+{
+    return varCache;
+}
+
+void MathLite::importCache(const std::map<std::string, MathStack>& cache)
+{
+    varCache = cache;
+}
+
+bool MathLite::isValid(const std::string &varName) const
+{
+    if(varName == "pi") return false;
+    if(math_funcs.find(varName) != math_funcs.end()) return false;
+    return true;
+}
+
+bool MathLite::isVariable(const std::string &name) const
+{
+    if(varCache.find(name) != varCache.end()) return true;
+    return false;
+}
+
 std::vector<std::string> MathLite::split(const std::string &s, char delim)
 {
     std::stringstream ss(s);
@@ -328,7 +383,7 @@ std::vector<std::string> MathLite::split(const std::string &s, char delim)
     return elems;
 }
 
-bool MathLite::is_double(const std::string &s)
+bool MathLite::isDouble(const std::string &s)
 {
     if(s.empty()) return false;
     std::string::const_iterator it = s.begin();
